@@ -4,13 +4,15 @@ import pyrender
 import trimesh
 
 
-def augmenting_the_pcd(obj_file: str, view_direction: np.array, number_of_points: int = 20000):
+def augmenting_the_mesh(obj_file: str, view_direction: np.array, number_of_points: int = 20000, visualize: bool = False):
     mesh = o3d.io.read_triangle_mesh(obj_file)
     mesh.compute_vertex_normals()
     front_triangles = []
     for i in range(len(mesh.triangles)):
         normal = mesh.triangle_normals[i]
-        dot_product = normal.dot(view_direction)
+        view_direction_norm = view_direction / np.linalg.norm(view_direction)
+        dot_product = normal.dot(view_direction_norm)
+
         if dot_product > 0.5:
             front_triangles.append(mesh.triangles[i])
 
@@ -18,11 +20,15 @@ def augmenting_the_pcd(obj_file: str, view_direction: np.array, number_of_points
     front_mesh.vertices = mesh.vertices
     front_mesh.triangles = o3d.utility.Vector3iVector(front_triangles)
     pcd = front_mesh.sample_points_uniformly(number_of_points=number_of_points)  # Adjust number_of_points as needed
+
+    if visualize:
+        o3d.visualization.draw_geometries([pcd])
     return pcd
 
 
 def augmenting_from_depth(obj_file: str, visualize: bool = False,
-                          s=np.sqrt(2) / 2):  # s is the parameter for the orientation, camera pose should be improved
+                          s=np.sqrt(2) / 2, using_cpu: bool = False):
+    # TODO s is the parameter for the orientation; camera pose should be improved
     mesh = trimesh.load(obj_file)
     mesh = pyrender.Mesh.from_trimesh(mesh)
     scene = pyrender.Scene()
@@ -43,14 +49,18 @@ def augmenting_from_depth(obj_file: str, visualize: bool = False,
     r = pyrender.OffscreenRenderer(400, 400)
     color, depth = r.render(scene)
 
-    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d.cpu.pybind.geometry.Image(color),
-                                                                    o3d.cpu.pybind.geometry.Image(depth))
+    if not using_cpu:
+        rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color=o3d.pybind.geometry.Image(color),
+                                                                    depth=o3d.pybind.geometry.Image(depth))
+    else:
+        rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color=o3d.cpu.pybind.geometry.Image(color),
+                                                                        depth=o3d.cpu.pybind.geometry.Image(depth))
 
     intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
 
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image,
                                                          intrinsic)
-    pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+    pcd = pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
     if visualize:
         o3d.visualization.draw_geometries([pcd])
