@@ -24,7 +24,7 @@ def transform_depth_rgbd_to_pcd(scene: str = "scene01", image_nr: str = "000001"
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image,
                                                          intrinsic,
                                                          # TODO
-                                                         extrinsic=
+                                                         #extrinsic=
                                                          # o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
                                                          )
     pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])

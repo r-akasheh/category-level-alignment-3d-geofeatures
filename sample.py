@@ -46,7 +46,7 @@ array_test = np.array([[0.5,0.5,0.5], [0.1, 0.5, 0.5], [0.9, 0.5, 0.5], [0.5,0.7
 # array_test = np.array([[0.5,0.1,0.64], [0.45, 0.9, 0.5], [0.43, 0.7, 0.5], [0.5,0.45,0.65], [0.5,0.1,0.36]])
 
 
-directory_path = base_path + "obj_models_small_size_final/" + object + "/"
+directory_path = base_path + "obj_models/obj_models_small_size_final/" + object_type + "/"
 for filename in os.listdir(directory_path):
     if filename.endswith(".obj"):
         point_cloud = obj_to_point_cloud(directory_path + filename)
