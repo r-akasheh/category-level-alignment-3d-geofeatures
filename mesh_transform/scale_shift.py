@@ -87,7 +87,7 @@ def scale_shift(point_cloud: o3d.geometry.PointCloud, visualize: bool = False) -
         line_set = get_line_set(points)
         o3d.visualization.draw_geometries([translated_pc, mesh_frame, line_set], mesh_show_back_face=False)
 
-        return translated_pc
+    return translated_pc
 
 
 def scale_shift_nocs_color_demonstration(point_cloud: o3d.geometry.PointCloud, five_positions: np.array,
