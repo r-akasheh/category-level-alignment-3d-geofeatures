@@ -3,6 +3,8 @@ import open3d as o3d
 import pyrender
 import trimesh
 
+from mesh_transform.scale_shift import scale_shift
+
 
 def augmenting_the_mesh(obj_file: str, view_direction: np.array, number_of_points: int = 20000, visualize: bool = False):
     mesh = o3d.io.read_triangle_mesh(obj_file)
@@ -20,9 +22,10 @@ def augmenting_the_mesh(obj_file: str, view_direction: np.array, number_of_point
     front_mesh.vertices = mesh.vertices
     front_mesh.triangles = o3d.utility.Vector3iVector(front_triangles)
     pcd = front_mesh.sample_points_uniformly(number_of_points=number_of_points)  # Adjust number_of_points as needed
-
+    pcd = scale_shift(pcd)
     if visualize:
         o3d.visualization.draw_geometries([pcd])
+
     return pcd
 
 
@@ -44,7 +47,7 @@ def augmenting_from_depth(obj_file: str, visualize: bool = False,
     scene.add(camera, pose=camera_pose)
     light = pyrender.SpotLight(color=np.ones(3), intensity=3.0,
                                innerConeAngle=np.pi / 16.0,
-                               outerConeAngle=np.pi / 6.0)
+                               outerConeAngle= np.pi / 6.0)
     scene.add(light, pose=camera_pose)
     r = pyrender.OffscreenRenderer(400, 400)
 
@@ -52,15 +55,14 @@ def augmenting_from_depth(obj_file: str, visualize: bool = False,
 
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color=o3d.geometry.Image(color.astype(np.uint8)),
                                                                     depth=o3d.geometry.Image(depth))
-
     intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
 
-    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image,
-                                                         intrinsic)
+    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic)
 
     pcd.transform(camera_pose)
     pcd.transform([[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
+    pcd = scale_shift(pcd)
     if visualize:
         o3d.visualization.draw_geometries([pcd])
 

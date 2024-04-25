@@ -51,3 +51,4 @@ for filename in os.listdir(directory_path):
     if filename.endswith(".obj"):
         point_cloud = obj_to_point_cloud(directory_path + filename)
         y = scale_shift_nocs_color_demonstration(point_cloud, array_test, True)
+
