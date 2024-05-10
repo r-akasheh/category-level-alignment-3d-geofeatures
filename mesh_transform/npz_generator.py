@@ -47,12 +47,25 @@ def get_random_file_pairs(directory, obj_name, num_pairs=1):
     random.shuffle(files)
 
     # Generate pairs
-    random_pairs = []
-    for i in range(min(num_pairs, len(files) // 2)):
-        pair_dict = {"src": files[i * 2], "trg": files[i * 2 + 1], "dist": -1}
-        random_pairs.append(pair_dict)
+    #random_pairs = []
+    #for i in range(num_pairs):
+    #    pair_dict = {"src": files[i * 2], "trg": files[i * 2 + 1], "dist": -1}
+    #    random_pairs.append(pair_dict)
+    #return random_pairs
 
-    return random_pairs
+    pairs = set()  # Use a set to store unique pairs
+    while len(pairs) < num_pairs:
+        pair = tuple(sorted(random.sample(files, 2)))
+        #pair = {"src": pair[0], "trg": pair[1], "dist": -1}
+        # Sort the pair to ensure uniqueness
+        if pair[0] != pair[1]:
+            pairs.add(pair)
+
+    pairs_dict = []
+    for pair in pairs:
+        pairs_dict.append({"src": pair[0], "trg": pair[1], "dist": -1})
+    return pairs_dict
+
 
 
 def chamfer_distance(pcd_a, pcd_b):
@@ -109,6 +122,7 @@ for item in item_types:
                                                             "/npz_files/" + item + "/",
                                       obj_name=name,
                                       num_pairs=20)
+        print(len(pairs))
         names[item][name] = pairs
 
 for item in item_types:
@@ -133,16 +147,20 @@ for item in item_types:
     for name in obj_names[item]:
         name_pairs = names[item][name]
         filename = f"housecat_6d_test/{name}"
-        for pair in name_pairs:
-            with open(filename + ".txt", "w") as file:
+
+        with open(filename + ".txt", "w") as file:
+            for pair in name_pairs:
                 file.write(pair["src"] + " " + pair["trg"] + " " + str("{:.3f}".format(pair["dist"])) + "\n")
-            if 0.05 < pair["dist"] < 0.1:
-                with open(filename + "-0.05.txt", "w") as file:
+        with open(filename + "-0.05.txt", "w") as file:
+            for pair in name_pairs:
+                if 0.05 <= pair["dist"]:
                     file.write(pair["src"] + " " + pair["trg"] + " " + str("{:.3f}".format(pair["dist"])) + "\n")
-            if 0.1 <= pair["dist"] < 0.15:
-                with open(filename + "-0.1.txt", "w") as file:
+        with open(filename + "-0.1.txt", "w") as file:
+            for pair in name_pairs:
+                if 0.1 <= pair["dist"]:
                     file.write(pair["src"] + " " + pair["trg"] + " " + str("{:.3f}".format(pair["dist"])) + "\n")
-            if 0.15 <= pair["dist"]:
-                with open(filename + "-0.15.txt", "w") as file:
+        with open(filename + "-0.15.txt", "w") as file:
+            for pair in name_pairs:
+                if 0.15 <= pair["dist"]:
                     file.write(pair["src"] + " " + pair["trg"] + " " + str("{:.3f}".format(pair["dist"])) + "\n")
 
