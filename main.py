@@ -8,11 +8,12 @@ from mesh_transform import base_path
 
 class ObjectNotFoundError(Exception):
     def __init__(self):
-        super().__init__("Object was not found in specified. Try another class or scene")
+        super().__init__("Object was not found in specified scene. Try another class or scene")
+
     pass
 
 
-def scale_shift_for_usage(base_path, obj: str = None, scene_nr: str = "01", image_nr: str = "000001"):
+def extract_obj_pcd_from_scene(base_path, obj: str = None, scene_nr: str = "01", image_nr: str = "000001"):
     scene_path = base_path + "scene1-10/scene{}/rgb/{}.png".format(str(scene_nr), str(image_nr))
     file_path = base_path + "scene1-10/scene{}/meta.txt".format(str(scene_nr))
     obj_name = ""
@@ -60,4 +61,4 @@ def scale_shift_for_usage(base_path, obj: str = None, scene_nr: str = "01", imag
     print("Processed scene successfully")
 
 
-scale_shift_for_usage(base_path, obj="shoe", image_nr="000003", scene_nr="01")
+extract_obj_pcd_from_scene(base_path, obj="shoe", image_nr="000003", scene_nr="01")
