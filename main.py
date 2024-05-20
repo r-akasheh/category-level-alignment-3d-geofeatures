@@ -1,7 +1,5 @@
 import open3d as o3d
 import numpy as np
-from PIL import Image
-import matplotlib.pyplot as plt
 
 from mesh_transform import base_path
 
