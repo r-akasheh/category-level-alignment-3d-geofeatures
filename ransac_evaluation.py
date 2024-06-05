@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import pickle
 
-from main import extract_obj_pcd_from_scene, retrieve_obj_pcd, load_features_run_ransac
+from main import extract_obj_pcd_from_scene, retrieve_obj_pcd, ransac
 from mesh_transform import base_path
 
 import roma
@@ -71,7 +71,7 @@ for i in tqdm(range(1, 11)):
 
             obj_pcd = retrieve_obj_pcd(obj_name)
 
-            result_ransac, pred_trans = load_features_run_ransac(scene_pcd, obj_pcd, item_type)
+            pred_trans = ransac(scene_pcd, obj_pcd, item_type)
             rot_pred_transf = torch.tensor(pred_trans[:3, :3])
             trans_pred_transf = pred_trans[:3, 3]
 
