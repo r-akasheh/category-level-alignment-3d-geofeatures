@@ -21,16 +21,16 @@ class ObjectNotFoundError(Exception):
     pass
 
 
-def load_features_run_ransac(scene_pcd, obj_pcd, item_type):
-    voxel_size = 0.025
-    n_sample_src = 20000
+def ransac_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, visualize: bool = False):
+    n_sample_src = len(obj_pcd.points)
     n_sample_trg = len(scene_pcd.points)
     point_cloud_src = scale_shift(obj_pcd)
 
     scaling_variable, _ = calculate_scaling_variable_and_translate(scene_pcd)
     point_cloud_trg = scene_pcd.scale(1 / (np.sqrt(3) * scaling_variable), center=(0, 0, 0))
 
-    o3d.visualization.draw_geometries([point_cloud_src, point_cloud_trg])
+    if visualize:
+        o3d.visualization.draw_geometries([point_cloud_src, point_cloud_trg])
 
     src_xyz, tgt_xyz, src_coords, tgt_coords, src_shape, tgt_shape = spconv_vox(np.array(point_cloud_src.points),
                                                                                 np.array(point_cloud_trg.points),
@@ -40,9 +40,10 @@ def load_features_run_ransac(scene_pcd, obj_pcd, item_type):
     list_data = [(src_xyz, tgt_xyz, src_coords, tgt_coords, src_features, tgt_features, torch.ones(1, 2),
                   np.eye(4), src_shape, tgt_shape, None, np.ones((6, 6)))]
 
-    ## init model
     model = FCGF_spconv()
-    checkpoint = torch.load(base_path + 'category-level-alignment-3d-geofeatures/model/' + 'snapshot/final_models/' + item_type + '/checkpoint.pth')
+    checkpoint = torch.load(
+        base_path + 'category-level-alignment-3d-geofeatures/model/' + 'snapshot/final_models/' +
+        item_type + '/checkpoint.pth')
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     model = model.cuda()
@@ -71,7 +72,11 @@ def load_features_run_ransac(scene_pcd, obj_pcd, item_type):
     src_feats = out_src.features
     tgt_feats = out_tgt.features
 
-    ## register
+    return n_sample_src, n_sample_trg, src_pcd, tgt_pcd, src_feats, tgt_feats, point_cloud_src, point_cloud_trg
+
+
+def ransac(n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
+           src_feats, tgt_feats, point_cloud_src, point_cloud_trg, voxel_size: float = 0.025, visualize: bool = False):
     src_sel = np.random.choice(len(src_pcd), min(len(src_pcd), n_sample_src), replace=False)
     tgt_sel = np.random.choice(len(tgt_pcd), min(len(tgt_pcd), n_sample_trg), replace=False)
 
@@ -89,10 +94,14 @@ def load_features_run_ransac(scene_pcd, obj_pcd, item_type):
         o3d.registration.RANSACConvergenceCriteria(50000, 1000))
     pred_trans = result_ransac.transformation
 
-    visualize_registration(point_cloud_src, point_cloud_trg, pred_trans)
+    if visualize:
+        visualize_registration(point_cloud_src, point_cloud_trg, pred_trans)
+
+    return pred_trans
 
 
-def extract_obj_pcd_from_scene(base_path, obj: str = None, scene_nr: str = "01", image_nr: str = "000001"):
+def extract_obj_pcd_from_scene(base_path, obj: str = None, scene_nr: str = "01", image_nr: str = "000001",
+                               visualize: bool = False, verbose: bool = False):
     scene_path = base_path + "scene1-10/scene{}/rgb/{}.png".format(str(scene_nr), str(image_nr))
     file_path = base_path + "scene1-10/scene{}/meta.txt".format(str(scene_nr))
     obj_name = ""
@@ -136,8 +145,10 @@ def extract_obj_pcd_from_scene(base_path, obj: str = None, scene_nr: str = "01",
                                                          extrinsic=np.linalg.inv(extrinsic))
     pcd.transform([[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
-    o3d.visualization.draw_geometries([pcd], mesh_show_back_face=False)
-    print("Processed scene successfully")
+    if visualize:
+        o3d.visualization.draw_geometries([pcd], mesh_show_back_face=False)
+    if verbose:
+        print("Processed scene successfully")
     return pcd, obj_name
 
 
@@ -154,12 +165,19 @@ def retrieve_obj_pcd(obj_name):
     return point_cloud
 
 
-#scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="cutlery", image_nr="000003", scene_nr="02")
-#scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="cutlery", image_nr="000003", scene_nr="03")
+
+
+# scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="cutlery", image_nr="000003", scene_nr="02")
+# scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="cutlery", image_nr="000003", scene_nr="03")
 scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="shoe", image_nr="000113", scene_nr="07")
-print(obj_name)
+
 item_type = obj_name.split("-")[0]
 obj_pcd = retrieve_obj_pcd(obj_name)
+
+(n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
+ src_feats, tgt_feats, point_cloud_src, point_cloud_trg) = ransac_prep(scene_pcd, obj_pcd, item_type)
+pred_trans = ransac(n_sample_src, n_sample_trg, src_pcd, tgt_pcd, src_feats, tgt_feats, point_cloud_src, point_cloud_trg)
+
+print(pred_trans)
 o3d.io.write_point_cloud(filename="./src_pcd.ply", pointcloud=scene_pcd)
 o3d.io.write_point_cloud(filename="./trg_pcd.ply", pointcloud=obj_pcd)
-load_features_run_ransac(scene_pcd, obj_pcd, item_type)
