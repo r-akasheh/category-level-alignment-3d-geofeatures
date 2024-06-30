@@ -1,6 +1,7 @@
 import open3d as o3d
 import numpy as np
 from spconv.pytorch.utils import PointToVoxel
+import cv2
 
 from mesh_transform.scale_shift import scale_shift, calculate_scaling_variable_and_translate
 from utils.ransac_utils import visualize_registration
@@ -21,7 +22,7 @@ class ObjectNotFoundError(Exception):
     pass
 
 
-def ransac_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, visualize: bool = False):
+def registration_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, visualize: bool = False):
     n_sample_src = len(obj_pcd.points)
     n_sample_trg = len(scene_pcd.points)
     point_cloud_src = scale_shift(obj_pcd)
@@ -43,7 +44,9 @@ def ransac_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, visual
     model = FCGF_spconv()
     checkpoint = torch.load(
         base_path + 'category-level-alignment-3d-geofeatures/model/' + 'snapshot/final_models/' +
-        item_type + '/checkpoint.pth')
+        item_type + '/checkpoints/model_best_recall.pth')
+
+   #  checkpoint = torch.load("C:/master/robot-vision-modul/FCGF_spconv/checkpoint.pth")
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     model = model.cuda()
@@ -100,8 +103,8 @@ def ransac(n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
     return pred_trans
 
 
-def extract_obj_pcd_from_scene(base_path, obj: str = None, scene_nr: str = "01", image_nr: str = "000001",
-                               visualize: bool = False, verbose: bool = False):
+def extract_obj_pcd_from_scene_o3d(base_path, obj: str = None, scene_nr: str = "01", image_nr: str = "000001",
+                                   visualize: bool = False, verbose: bool = False):
     scene_path = base_path + "scene1-10/scene{}/rgb/{}.png".format(str(scene_nr), str(image_nr))
     file_path = base_path + "scene1-10/scene{}/meta.txt".format(str(scene_nr))
     obj_name = ""
@@ -142,7 +145,8 @@ def extract_obj_pcd_from_scene(base_path, obj: str = None, scene_nr: str = "01",
     extrinsic = np.loadtxt(base_path + "scene1-10/scene{}/camera_pose/{}.txt".format(scene_nr, image_nr))
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(image=rgbd_image,
                                                          intrinsic=intrinsic,
-                                                         extrinsic=np.linalg.inv(extrinsic))
+                                                         extrinsic=extrinsic)
+    # extrinsic=np.linalg.inv(extrinsic))
     pcd.transform([[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
     if visualize:
@@ -150,6 +154,95 @@ def extract_obj_pcd_from_scene(base_path, obj: str = None, scene_nr: str = "01",
     if verbose:
         print("Processed scene successfully")
     return pcd, obj_name
+
+
+def extract_obj_pcd_from_scene(base_path, obj: str = None, scene_nr: str = "01", image_nr: str = "000001",
+                               visualize: bool = False):
+    file_path = base_path + "scene1-10/scene{}/meta.txt".format(str(scene_nr))
+    obj_name = ""
+    with open(file_path, 'r') as file:
+        for line in file:
+            if obj in line:
+                # Process each line here
+                obj_name = line.strip()[4:]
+                instance_id = line.strip()[0]
+
+    if not obj_name:
+        raise ObjectNotFoundError
+
+    mask = base_path + "scene1-10/scene{}/instance/{}_{}.png".format(str(scene_nr), str(image_nr), str(obj_name))
+    depth = base_path + "scene1-10/scene{}/depth/{}.png".format(str(scene_nr), str(image_nr))
+
+    rgb_image = cv2.imread(mask)
+    depth_image = cv2.imread(depth, -1)
+    extrinsics = np.loadtxt(base_path + "scene1-10/scene{}/camera_pose/{}.txt".format(scene_nr, image_nr))
+    intrinsics = np.loadtxt(base_path + "scene1-10/scene{}/intrinsics.txt".format(scene_nr))
+
+    # Assuming intrinsics matrix is in the form [fx, 0, cx; 0, fy, cy; 0, 0, 1]
+    fx, fy, cx, cy = intrinsics[0, 0], intrinsics[1, 1], intrinsics[0, 2], intrinsics[1, 2]
+
+    # Create point cloud
+    points = []
+    colors = []
+
+    height, width = depth_image.shape
+
+    """for v in range(height):
+        for u in range(width):
+            color = rgb_image[v, u]  # Assuming color image is already normalized
+            z = depth_image[v, u] / 1000.0  # Assuming depth image is in millimeters
+            if z == 0: continue
+            x = (u - cx) * z / fx
+            y = (v - cy) * z / fy
+            points.append([x, y, z])
+            colors.append(color)
+    """
+
+    # Assuming rgb_image, depth_image, cx, cy, fx, fy are defined
+    height, width, _ = rgb_image.shape
+
+    # Normalize depth image to avoid division by zero
+    normalized_depth_image = depth_image / 1000.0
+    valid_depth_mask = normalized_depth_image > 0
+
+    # Create meshgrid for pixel coordinates
+    u, v = np.meshgrid(np.arange(width), np.arange(height))
+
+    # Compute x, y, z coordinates for all pixels
+    z = normalized_depth_image[valid_depth_mask]
+    x = (u[valid_depth_mask] - cx) * z / fx
+    y = (v[valid_depth_mask] - cy) * z / fy
+
+    # Extract colors for valid depth pixels
+    colors = rgb_image[valid_depth_mask]
+
+    # Stack the coordinates to form the points array
+    points = np.column_stack((x, y, z))
+
+    # Convert colors to list if needed (optional, depending on use case)
+    colors = colors.tolist()
+
+    # Convert points to list if needed (optional, depending on use case)
+    points = points.tolist()
+
+    # Convert to Open3D point cloud
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(np.array(points))
+    pcd.colors = o3d.utility.Vector3dVector(np.array(colors) / 255.0)
+
+    # Save point cloud
+    # o3d.io.write_point_cloud('pointcloud.ply', pcd)
+    ttest = (np.array(pcd.points))[~np.all(np.array(pcd.colors) == 1, axis=1)]
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(ttest)
+    if visualize:
+        o3d.visualization.draw_geometries([pcd])
+
+    return pcd, obj_name, (int(instance_id)-1)
+
+def display_inlier_outlier(cloud, ind):
+    inlier_cloud = cloud.select_by_index(ind)
+    return inlier_cloud
 
 
 def retrieve_obj_pcd(obj_name):
@@ -165,19 +258,24 @@ def retrieve_obj_pcd(obj_name):
     return point_cloud
 
 
-
-
 # scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="cutlery", image_nr="000003", scene_nr="02")
 # scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="cutlery", image_nr="000003", scene_nr="03")
-scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="shoe", image_nr="000113", scene_nr="07")
+#scene_pcd, obj_name, instance_id = extract_obj_pcd_from_scene(base_path, obj="teapot", image_nr="000063",
+#                                                 scene_nr="05")
 
-item_type = obj_name.split("-")[0]
-obj_pcd = retrieve_obj_pcd(obj_name)
+# noise removal
+# cl, ind = scene_pcd.remove_radius_outlier(nb_points=60, radius=0.0005)
+# scene_pcd = display_inlier_outlier(scene_pcd, ind)
 
-(n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
- src_feats, tgt_feats, point_cloud_src, point_cloud_trg) = ransac_prep(scene_pcd, obj_pcd, item_type)
-pred_trans = ransac(n_sample_src, n_sample_trg, src_pcd, tgt_pcd, src_feats, tgt_feats, point_cloud_src, point_cloud_trg)
 
-print(pred_trans)
-o3d.io.write_point_cloud(filename="./src_pcd.ply", pointcloud=scene_pcd)
-o3d.io.write_point_cloud(filename="./trg_pcd.ply", pointcloud=obj_pcd)
+# item_type = obj_name.split("-")[0]
+# obj_pcd = retrieve_obj_pcd(obj_name)
+
+# (n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
+#  src_feats, tgt_feats, point_cloud_src, point_cloud_trg) = registration_prep(scene_pcd, obj_pcd, item_type)
+# pred_trans = ransac(n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
+#                    src_feats, tgt_feats, point_cloud_src, point_cloud_trg)
+
+# print(pred_trans)
+# o3d.io.write_point_cloud(filename="./src_pcd.ply", pointcloud=scene_pcd)
+# o3d.io.write_point_cloud(filename="./trg_pcd.ply", pointcloud=obj_pcd)
