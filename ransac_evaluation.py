@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 mappings = {}
 
+
 def run_ransac_evals():
     for i in tqdm(range(1, 11)):
         scene_nr_short = str(i).zfill(2)
@@ -34,7 +35,8 @@ def run_ransac_evals():
                 obj_pcd = retrieve_obj_pcd(obj_name)
 
                 (n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
-                 src_feats, tgt_feats, point_cloud_src, point_cloud_trg) = registration_prep(scene_pcd, obj_pcd, item_type)
+                 src_feats, tgt_feats, point_cloud_src, point_cloud_trg) = registration_prep(scene_pcd, obj_pcd,
+                                                                                             item_type)
 
                 pred_trans = ransac(n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
                                     src_feats, tgt_feats, point_cloud_src, point_cloud_trg)
@@ -59,4 +61,6 @@ def run_ransac_evals():
     with open("evaluation/ransac_mappings_finetuned_projection.pickle", 'wb') as f:
         pickle.dump(mappings, f)
 
-run_ransac_evals()
+
+if __name__ == "__main__":
+    run_ransac_evals()

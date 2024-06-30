@@ -166,4 +166,5 @@ def run_teaser_eval():
         pickle.dump(mappings, f)
 
 
-# run_teaser_eval()
+if __name__ == "__main__":
+    run_teaser_eval()
