@@ -4,7 +4,8 @@ import open3d as o3d
 import torch
 import copy
 import pdb
-from plyfile import PlyData,PlyElement
+from plyfile import PlyData, PlyElement
+
 
 def setup_seed(seed):
     """
@@ -16,6 +17,7 @@ def setup_seed(seed):
     np.random.seed(seed)
     torch.backends.cudnn.deterministic = True
 
+
 def read_ply(filename):
     """ read XYZ point cloud from filename PLY file """
     plydata = PlyData.read(filename)
@@ -26,11 +28,13 @@ def read_ply(filename):
     pc_array = np.hstack([x_data[:, None], y_data[:, None], z_data[:, None]])
     return pc_array
 
+
 def to_tsfm(rot, trans):
     tsfm = np.eye(4)
     tsfm[:3, :3] = rot
     tsfm[:3, 3] = trans.flatten()
     return tsfm
+
 
 def to_o3d_pcd(xyz):
     """
@@ -41,14 +45,16 @@ def to_o3d_pcd(xyz):
     pcd.points = o3d.utility.Vector3dVector(to_array(xyz))
     return pcd
 
+
 def to_tensor(array):
     """
     Convert array to tensor
     """
-    if(not isinstance(array,torch.Tensor)):
+    if (not isinstance(array, torch.Tensor)):
         return torch.from_numpy(array).float()
     else:
         return array
+
 
 def to_array(tensor):
     """
@@ -59,6 +65,7 @@ def to_array(tensor):
     else:
         return tensor
 
+
 def to_o3d_feats(embedding):
     """
     Convert tensor/array to open3d features
@@ -67,6 +74,7 @@ def to_o3d_feats(embedding):
     feats = o3d.registration.Feature()
     feats.data = to_array(embedding).T
     return feats
+
 
 def get_correspondences(src, tgt, trans, search_voxel_size, K=None):
     src_pcd = copy.deepcopy(src)

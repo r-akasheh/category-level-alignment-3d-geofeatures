@@ -162,8 +162,8 @@ def run_teaser_eval():
                                                            "theta": theta
                                                            }
 
-    with open("evaluation/teaser_mappings_finetuned.pickle", 'wb') as f:
+    with open("evaluation/teaser_mappings_baseline.pickle", 'wb') as f:
         pickle.dump(mappings, f)
 
 
-run_teaser_eval()
+# run_teaser_eval()

@@ -34,4 +34,4 @@ def transform_depth_rgbd_to_pcd(scene: str = "scene01", image_nr: str = "000001"
         o3d.visualization.draw_geometries([pcd])
     return pcd, rgbd_image
 
-transform_depth_rgbd_to_pcd(visualize=True)
+#transform_depth_rgbd_to_pcd(visualize=True)

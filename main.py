@@ -22,7 +22,7 @@ class ObjectNotFoundError(Exception):
     pass
 
 
-def registration_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, visualize: bool = False):
+def registration_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, visualize: bool = False, use_baseline: bool = False):
     n_sample_src = len(obj_pcd.points)
     n_sample_trg = len(scene_pcd.points)
     point_cloud_src = scale_shift(obj_pcd)
@@ -42,11 +42,19 @@ def registration_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, 
                   np.eye(4), src_shape, tgt_shape, None, np.ones((6, 6)))]
 
     model = FCGF_spconv()
-    checkpoint = torch.load(
-        base_path + 'category-level-alignment-3d-geofeatures/model/' + 'snapshot/final_models/' +
-        item_type + '/checkpoints/model_best_recall.pth')
 
-   #  checkpoint = torch.load("C:/master/robot-vision-modul/FCGF_spconv/checkpoint.pth")
+    if use_baseline:
+        checkpoint = torch.load("C:/master/robot-vision-modul/FCGF_spconv/checkpoint.pth")
+    else:
+        if item_type == "teapot":
+            checkpoint = torch.load(base_path + "FCGF_spconv/snapshot/06281113/teapot/checkpoints/model_best_recall.pth")
+        else:
+            checkpoint = torch.load(
+                 base_path + 'category-level-alignment-3d-geofeatures/model/' + 'snapshot/final_models/' +
+                 item_type + '/checkpoints/model_best_recall.pth')
+        #checkpoint = torch.load(base_path + "FCGF_spconv/snapshot/06281113/" + item_type + "/checkpoints/model_best_recall.pth")
+
+
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     model = model.cuda()
@@ -258,7 +266,7 @@ def retrieve_obj_pcd(obj_name):
     return point_cloud
 
 
-# scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="cutlery", image_nr="000003", scene_nr="02")
+# scene_pcd, obj_name, instance_id = extract_obj_pcd_from_scene(base_path, obj="shoe", image_nr="000243", scene_nr="07")#, visualize=True)
 # scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="cutlery", image_nr="000003", scene_nr="03")
 #scene_pcd, obj_name, instance_id = extract_obj_pcd_from_scene(base_path, obj="teapot", image_nr="000063",
 #                                                 scene_nr="05")
@@ -274,7 +282,7 @@ def retrieve_obj_pcd(obj_name):
 # (n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
 #  src_feats, tgt_feats, point_cloud_src, point_cloud_trg) = registration_prep(scene_pcd, obj_pcd, item_type)
 # pred_trans = ransac(n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
-#                    src_feats, tgt_feats, point_cloud_src, point_cloud_trg)
+#                     src_feats, tgt_feats, point_cloud_src, point_cloud_trg)
 
 # print(pred_trans)
 # o3d.io.write_point_cloud(filename="./src_pcd.ply", pointcloud=scene_pcd)

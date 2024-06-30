@@ -121,8 +121,7 @@ def scale_shift_nocs_color_demonstration(point_cloud: o3d.geometry.PointCloud, f
         spheres.append(mesh_sphere)
 
     # Create a coordinate frame with origin 0,0,0
-    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
-        size=0.1, origin=[0, 0, 0])
+    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
 
     # Create a bounding box with unit diagonal. Each side of a cube with a unit diagonal is equal to 1/np.sqrt(3).
     # To get the coordinates of each of the 8 corners of a bounding box, we have to divide that length by 2

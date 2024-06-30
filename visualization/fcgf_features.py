@@ -2,7 +2,7 @@ import numpy as np
 import open3d as o3d
 from sklearn.decomposition import PCA
 
-from main import extract_obj_pcd_from_scene, retrieve_obj_pcd, ransac_prep
+from main import extract_obj_pcd_from_scene, retrieve_obj_pcd, registration_prep
 from mesh_transform import base_path
 
 
@@ -36,5 +36,5 @@ scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="shoe", image_nr
 item_type = obj_name.split("-")[0]
 obj_pcd = retrieve_obj_pcd(obj_name)
 
-_, _, src_pcd, tgt_pcd, src_feats, tgt_feats, _, _ = ransac_prep(scene_pcd, obj_pcd, item_type)
+_, _, src_pcd, tgt_pcd, src_feats, tgt_feats, _, _ = registration_prep(scene_pcd, obj_pcd, item_type)
 feature_visualizer(src_pcd, src_feats, tgt_pcd, tgt_feats)
