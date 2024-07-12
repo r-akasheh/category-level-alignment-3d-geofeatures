@@ -1,6 +1,8 @@
 import numpy as np
 import open3d as o3d
+import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 from main import extract_obj_pcd_from_scene, retrieve_obj_pcd, registration_prep
 from mesh_transform import base_path
@@ -11,30 +13,48 @@ def feature_visualizer(src_pcd, src_feats, tgt_pcd, tgt_feats):
     tgt_feats = tgt_feats.cpu()
     src_pcd = src_pcd.cpu()
     tgt_pcd = tgt_pcd.cpu()
-    tsne = PCA(n_components=3).fit_transform(src_feats)
-    if np.min(tsne) < 0:
-        tsne = tsne - np.min(tsne)
 
-    pcd0 = o3d.geometry.PointCloud()
-    pcd0.points = o3d.utility.Vector3dVector(src_pcd.numpy())
-    pcd0.colors = o3d.utility.Vector3dVector((tsne) / np.max(tsne))
-    o3d.visualization.draw_geometries([pcd0])
+    ## GPT CODE
+    scaler_src = StandardScaler()
+    src_feats_scaled = scaler_src.fit_transform(src_feats)
 
-    tsne = PCA(n_components=3).fit_transform(tgt_feats)
-    if np.min(tsne) < 0:
-        tsne = tsne - np.min(tsne)
+    scaler_trg = StandardScaler()
+    trg_feats_scaled = scaler_trg.fit_transform(tgt_feats)
 
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(tgt_pcd.numpy())
-    pcd.colors = o3d.utility.Vector3dVector(tsne / np.max(tsne))
-    pcd.translate((1, 0, 0))
-    o3d.visualization.draw_geometries([pcd, pcd0])
+    # Apply PCA to reduce to 3 dimensions for each dataset
+    pca_src = PCA(n_components=3)
+    src_pca = pca_src.fit_transform(src_feats_scaled)
+
+    pca_trg = PCA(n_components=3)
+    trg_pca = pca_trg.fit_transform(trg_feats_scaled)
+
+    # Normalize the PCA components to the range [0, 1]
+    src_pca_min, src_pca_max = src_pca.min(axis=0), src_pca.max(axis=0)
+    trg_pca_min, trg_pca_max = trg_pca.min(axis=0), trg_pca.max(axis=0)
+
+    src_pca_normalized = (src_pca - src_pca_min) / (src_pca_max - src_pca_min)
+    trg_pca_normalized = (trg_pca - trg_pca_min) / (trg_pca_max - trg_pca_min)
+
+    ## GPT CODE END
+
+    pcd_src = o3d.geometry.PointCloud()
+    pcd_src.points = o3d.utility.Vector3dVector(src_pcd.numpy())
+    pcd_src.colors = o3d.utility.Vector3dVector(src_pca_normalized)
+
+    pcd_trg = o3d.geometry.PointCloud()
+    pcd_trg.points = o3d.utility.Vector3dVector(tgt_pcd.numpy())
+    pcd_trg.colors = o3d.utility.Vector3dVector(trg_pca_normalized)
+    pcd_trg.translate((1, 0, 0))
+    o3d.visualization.draw_geometries([pcd_src, pcd_trg])
 
 
-scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="shoe", image_nr="000113",
-                                                                 scene_nr="07")
-item_type = obj_name.split("-")[0]
-obj_pcd = retrieve_obj_pcd(obj_name)
+obj_pcd_src = retrieve_obj_pcd("shoe-sky_blue_striped_right")
+obj_pcd_trg = retrieve_obj_pcd("shoe-sky_blue_250_right")
 
-_, _, src_pcd, tgt_pcd, src_feats, tgt_feats, _, _ = registration_prep(scene_pcd, obj_pcd, item_type)
-feature_visualizer(src_pcd, src_feats, tgt_pcd, tgt_feats)
+
+_, _, src_pcd, tgt_pcd, src_feats, trg_feats, _, _ = registration_prep(obj_pcd_src, obj_pcd_trg, "shoe", use_baseline=False)
+
+feature_visualizer(src_pcd=src_pcd, tgt_pcd=tgt_pcd, src_feats=src_feats, tgt_feats=trg_feats)
+
+
+
