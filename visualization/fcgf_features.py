@@ -48,11 +48,12 @@ def feature_visualizer(src_pcd, src_feats, tgt_pcd, tgt_feats):
     o3d.visualization.draw_geometries([pcd_src, pcd_trg])
 
 
-obj_pcd_src = retrieve_obj_pcd("shoe-sky_blue_striped_right")
-obj_pcd_trg = retrieve_obj_pcd("shoe-sky_blue_250_right")
+obj_pcd_src = retrieve_obj_pcd("shoe-crocs_white_cyan_right")
+obj_pcd_trg = retrieve_obj_pcd("shoe-magenta_holes_right")
 
 
-_, _, src_pcd, tgt_pcd, src_feats, trg_feats, _, _ = registration_prep(obj_pcd_src, obj_pcd_trg, "shoe", use_baseline=False)
+_, _, src_pcd, tgt_pcd, src_feats, trg_feats, _, _ = registration_prep(obj_pcd_src, obj_pcd_trg, "shoe",
+                                                                       use_baseline=False)
 
 feature_visualizer(src_pcd=src_pcd, tgt_pcd=tgt_pcd, src_feats=src_feats, tgt_feats=trg_feats)
 

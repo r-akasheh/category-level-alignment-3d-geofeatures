@@ -1,6 +1,7 @@
 import os
 import pickle
 
+import cv2
 import requests
 import roma
 import torch
@@ -64,6 +65,27 @@ def nearest_neighbors_features(tgt_feats, src_feats, source, target):
     else:
         less_feats, more_feats, src_reg_bool = [src_feats.cpu().numpy(), tgt_feats.cpu().numpy(), False]
 
+    pcd = source if src_reg_bool else target
+    tree = cKDTree(more_feats)
+
+    nearest_neighbors_indices = []
+    for item in less_feats:
+        result = tree.query(item, k=1)
+        nearest_neighbors_indices.append(result[1])
+
+    nearest_neighbors0 = pcd[nearest_neighbors_indices]
+    nearest_neighbors = o3d.geometry.PointCloud()
+    nearest_neighbors.points = o3d.utility.Vector3dVector(nearest_neighbors0.cpu().numpy())
+
+    # True: Teaser reg with source
+    return nearest_neighbors, src_reg_bool
+
+def nearest_neighbors_features_old(tgt_feats, src_feats, source, target):
+    if (tgt_feats.cpu().numpy()).shape[0] < (src_feats.cpu().numpy()).shape[0]:
+        less_feats, more_feats, src_reg_bool = [tgt_feats.cpu().numpy(), src_feats.cpu().numpy(), True]
+    else:
+        less_feats, more_feats, src_reg_bool = [src_feats.cpu().numpy(), tgt_feats.cpu().numpy(), False]
+
     pcd = target if src_reg_bool else source
     tree = cKDTree(less_feats)
 
@@ -79,9 +101,39 @@ def nearest_neighbors_features(tgt_feats, src_feats, source, target):
     # True: Teaser reg with source
     return nearest_neighbors, src_reg_bool
 
+def nearest_neighbors_features_ratio_test(tgt_feats, src_feats, tgt_pcd, src_pcd, threshold: float = 0.8):
+    flann_index_kdtree = 1
+    index_params = dict(algorithm=flann_index_kdtree, trees=5)
+    search_params = dict(checks=50)  # or pass empty dictionary
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+    if (tgt_feats.cpu().numpy()).shape[0] < (src_feats.cpu().numpy()).shape[0]:
+        [matches, src_reg_bool] = [
+            flann.knnMatch((src_feats.cpu().numpy()).astype(np.float32), (tgt_feats.cpu().numpy()).astype(np.float32),
+                           k=2), True]
+    else:
+        [matches, src_reg_bool] = [
+            flann.knnMatch((tgt_feats.cpu().numpy()).astype(np.float32), (src_feats.cpu().numpy()).astype(np.float32),
+                           k=2), False]
+
+    pcd = tgt_pcd if src_reg_bool else src_pcd
+
+    filtered_matches = [m for m, n in matches if (m.distance / n.distance) < threshold]
+
+    nearest_neighbors_indices = []
+    for match in filtered_matches:
+        query_idx, train_idx = match[0].queryIdx, match[0].trainIdx
+        nearest_neighbors_indices.append(train_idx)
+
+    nearest_neighbors0 = pcd[nearest_neighbors_indices]
+    nearest_neighbors = o3d.geometry.PointCloud()
+    nearest_neighbors.points = o3d.utility.Vector3dVector(nearest_neighbors0.cpu().numpy())
+
+    return nearest_neighbors, src_reg_bool
+
 
 def teaser(src_reg_bool, nearest_neighbors, source, target, visualize: bool = False):
-    if src_reg_bool:
+    if ~src_reg_bool:
         # source_np = np.transpose(source.numpy())
         # target_np = np.transpose(np.asarray(nearest_neighbors.points))
         source = to_o3d_pcd(source)
@@ -116,7 +168,7 @@ def teaser(src_reg_bool, nearest_neighbors, source, target, visualize: bool = Fa
         return "Segmentation fault caught"
 
 
-def run_teaser_eval():
+def run_teaser_eval(in_nocs_space: bool = False):
     for i in tqdm(range(1, 11)):
         print("ITERATION " + str(i))
         scene_nr_short = str(i).zfill(2)
@@ -142,27 +194,45 @@ def run_teaser_eval():
                 (n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
                  src_feats, tgt_feats, point_cloud_src, point_cloud_trg) = registration_prep(scene_pcd, obj_pcd,
                                                                                              item_type)
+                try:
+                    if in_nocs_space:
+                        nearest_neighbors, src_bool = nearest_neighbors_features(tgt_feats=tgt_feats,
+                                                                                 src_feats=src_feats,
+                                                                                 source=src_pcd,
+                                                                                 target=tgt_pcd)
+                        pred_rot, trans_pred = teaser(src_bool, nearest_neighbors, src_pcd, tgt_pcd)
 
-                nearest_neighbors, src_bool = nearest_neighbors_features(tgt_feats, src_feats, src_pcd, tgt_pcd)
-                pred_rot, trans_pred = teaser(src_bool, nearest_neighbors, src_pcd, tgt_pcd)
+                    else:
+                        nearest_neighbors, src_bool = nearest_neighbors_features(tgt_feats=tgt_feats,
+                                                                                 src_feats=src_feats,
+                                                                                 source=src_pcd,
+                                                                                 target=scene_pcd)
+                        pred_rot, trans_pred = teaser(src_bool, nearest_neighbors, src_pcd, scene_pcd)
 
-                rot_pred = torch.tensor(pred_rot)
+                    rot_pred = torch.tensor(pred_rot)
 
-                rot_ground_truth = retrieve_groundtruth_rotation(scene_nr_short, image_nr, instance_id)
-                trans_ground_truth = retrieve_groundtruth_translation(scene_nr_short, image_nr, instance_id)
+                    rot_ground_truth = retrieve_groundtruth_rotation(scene_nr_short, image_nr, instance_id)
+                    trans_ground_truth = retrieve_groundtruth_translation(scene_nr_short, image_nr, instance_id)
 
-                theta = roma.rotmat_geodesic_distance(rot_ground_truth, rot_pred)  # In radian
-                cos_theta = roma.rotmat_cosine_angle(rot_ground_truth.transpose(-2, -1) @ rot_pred)
+                    theta = roma.rotmat_geodesic_distance(rot_ground_truth, rot_pred)  # In radian
+                    cos_theta = roma.rotmat_cosine_angle(rot_ground_truth.transpose(-2, -1) @ rot_pred)
 
-                euclid_error = np.linalg.norm(trans_ground_truth - trans_pred)
-                mappings[scene_nr][image_nr][item_type] = {"pred_trans": trans_pred,
-                                                           "cos_theta": cos_theta,
-                                                           "euclid_error": euclid_error,
-                                                           "obj_name": obj_name,
-                                                           "theta": theta
-                                                           }
+                    euclid_error = np.linalg.norm(trans_ground_truth - trans_pred)
+                    mappings[scene_nr][image_nr][item_type] = {"pred_trans": trans_pred,
+                                                               "cos_theta": cos_theta,
+                                                               "euclid_error": euclid_error,
+                                                               "obj_name": obj_name,
+                                                               "theta": theta
+                                                               }
+                except:
+                    mappings[scene_nr][image_nr][item_type] = {"pred_trans": "error",
+                                                               "cos_theta": "error",
+                                                               "euclid_error": "error",
+                                                               "obj_name": "error",
+                                                               "theta": "error"
+                                                               }
 
-    with open("evaluation/teaser_mappings_baseline.pickle", 'wb') as f:
+    with open("evaluation/teaser_finetuned_nn_scene_full_fixed_prep.pickle", 'wb') as f:
         pickle.dump(mappings, f)
 
 

@@ -58,7 +58,7 @@ def run_ransac_evals():
                                                            "obj_name": obj_name
                                                            }
 
-    with open("evaluation/ransac_mappings_finetuned_projection.pickle", 'wb') as f:
+    with open("evaluation/third_evaluation_round/ransac_mappings_finetuned_projection.pickle", 'wb') as f:
         pickle.dump(mappings, f)
 
 

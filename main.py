@@ -2,9 +2,10 @@ import open3d as o3d
 import numpy as np
 from spconv.pytorch.utils import PointToVoxel
 import cv2
+import copy
 
 from mesh_transform.scale_shift import scale_shift, calculate_scaling_variable_and_translate
-from utils.ransac_utils import visualize_registration
+from utils.ransac_utils import visualize_registration, spconv_vox
 from model.lib.utils import to_o3d_pcd, to_o3d_feats, to_array
 import spconv.pytorch as spconv
 from model.dataset.dataloader import collate_spconv_pair_fn
@@ -12,7 +13,6 @@ import torch
 from model.resunet_spconv import FCGF_spconv
 
 from mesh_transform import base_path
-from utils.ransac_utils import spconv_vox
 
 
 class ObjectNotFoundError(Exception):
@@ -22,7 +22,8 @@ class ObjectNotFoundError(Exception):
     pass
 
 
-def registration_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, visualize: bool = False, use_baseline: bool = False):
+def registration_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, visualize: bool = False,
+                      use_baseline: bool = False):
     n_sample_src = len(obj_pcd.points)
     n_sample_trg = len(scene_pcd.points)
     point_cloud_src = scale_shift(obj_pcd)
@@ -46,14 +47,9 @@ def registration_prep(scene_pcd, obj_pcd, item_type, voxel_size: float = 0.025, 
     if use_baseline:
         checkpoint = torch.load("C:/master/robot-vision-modul/FCGF_spconv/checkpoint.pth")
     else:
-        if item_type == "teapot":
-            checkpoint = torch.load(base_path + "FCGF_spconv/snapshot/06281113/teapot/checkpoints/model_best_recall.pth")
-        else:
-            checkpoint = torch.load(
-                 base_path + 'category-level-alignment-3d-geofeatures/model/' + 'snapshot/final_models/' +
-                 item_type + '/checkpoints/model_best_recall.pth')
-        #checkpoint = torch.load(base_path + "FCGF_spconv/snapshot/06281113/" + item_type + "/checkpoints/model_best_recall.pth")
-
+        checkpoint = torch.load(
+            base_path + 'category-level-alignment-3d-geofeatures/model/' + 'snapshot/final_models/' +
+            item_type + '/checkpoints/model_best_recall.pth')
 
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
@@ -246,7 +242,8 @@ def extract_obj_pcd_from_scene(base_path, obj: str = None, scene_nr: str = "01",
     if visualize:
         o3d.visualization.draw_geometries([pcd])
 
-    return pcd, obj_name, (int(instance_id)-1)
+    return copy.deepcopy(pcd), obj_name, (int(instance_id) - 1)
+
 
 def display_inlier_outlier(cloud, ind):
     inlier_cloud = cloud.select_by_index(ind)
@@ -264,26 +261,3 @@ def retrieve_obj_pcd(obj_name):
     point_cloud = o3d.geometry.PointCloud()
     point_cloud.points = o3d.utility.Vector3dVector(points)
     return point_cloud
-
-
-# scene_pcd, obj_name, instance_id = extract_obj_pcd_from_scene(base_path, obj="shoe", image_nr="000243", scene_nr="07")#, visualize=True)
-# scene_pcd, obj_name = extract_obj_pcd_from_scene(base_path, obj="cutlery", image_nr="000003", scene_nr="03")
-#scene_pcd, obj_name, instance_id = extract_obj_pcd_from_scene(base_path, obj="teapot", image_nr="000063",
-#                                                 scene_nr="05")
-
-# noise removal
-# cl, ind = scene_pcd.remove_radius_outlier(nb_points=60, radius=0.0005)
-# scene_pcd = display_inlier_outlier(scene_pcd, ind)
-
-
-# item_type = obj_name.split("-")[0]
-# obj_pcd = retrieve_obj_pcd(obj_name)
-
-# (n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
-#  src_feats, tgt_feats, point_cloud_src, point_cloud_trg) = registration_prep(scene_pcd, obj_pcd, item_type)
-# pred_trans = ransac(n_sample_src, n_sample_trg, src_pcd, tgt_pcd,
-#                     src_feats, tgt_feats, point_cloud_src, point_cloud_trg)
-
-# print(pred_trans)
-# o3d.io.write_point_cloud(filename="./src_pcd.ply", pointcloud=scene_pcd)
-# o3d.io.write_point_cloud(filename="./trg_pcd.ply", pointcloud=obj_pcd)
